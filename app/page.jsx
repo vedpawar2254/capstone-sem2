@@ -58,6 +58,7 @@ export default function Home() {
       return;
     }
 
+    // Redirect to dynamic route
     router.push(`/map/${data.id}`);
   };
 
@@ -70,7 +71,7 @@ export default function Home() {
           
           <button
             onClick={createNewMap}
-            className="mb-8 px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg transition"
+            className="mb-8 px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg transition cursor-pointer"
           >
             + Create New Map
           </button>
@@ -84,7 +85,7 @@ export default function Home() {
               {maps.map(map => (
                 <div
                   key={map.id}
-                  onClick={() => router.push(`/map/${map.id}`)}
+                  onClick={() => router.push(`/map/${map.id}`)} 
                   className="bg-gray-800 p-4 rounded-lg hover:bg-gray-700 cursor-pointer transition border border-gray-700"
                 >
                   <h3 className="text-xl font-semibold mb-2">{map.title}</h3>

@@ -1,19 +1,17 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import { supabase } from '@/lib/supabaseClient';
-import { useSearchParams, useRouter } from 'next/navigation';
-import { v4 as uuidv4 } from 'uuid';
+import { useRouter, useParams } from 'next/navigation';
+import Link from 'next/link';
 
 export default function MindMap() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const mapId = searchParams.get('mapId');
+  const params = useParams();
+  const mapId = params.id;
   
-  const [nodes, setNodes] = useState([
-    { id: "1", x: 100, y: 100, text: "Main Idea", width: 120, height: 40 },
-    { id: "2", x: 300, y: 100, text: "Sub Topic", width: 120, height: 40 },
-  ]);
-  const [connections, setConnections] = useState([{ from: "1", to: "2" }]);
+  // State initialization
+  const [nodes, setNodes] = useState([]);
+  const [connections, setConnections] = useState([]);
   const [scale, setScale] = useState(1);
   const [selectedNode, setSelectedNode] = useState(null);
   const [isDraggingNode, setIsDraggingNode] = useState(false);
@@ -25,7 +23,8 @@ export default function MindMap() {
   const [editingNode, setEditingNode] = useState(null);
   const [editText, setEditText] = useState("");
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const [mapTitle, setMapTitle] = useState("My Mind Map");
+  const [mapTitle, setMapTitle] = useState("Untitled Map");
+  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const canvasRef = useRef(null);
@@ -35,105 +34,138 @@ export default function MindMap() {
   // Load map when component mounts or mapId changes
   useEffect(() => {
     const loadMap = async () => {
-      if (!mapId) return;
+      if (mapId) {
+        setIsLoading(true);
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) {
+            router.push('/login');
+            return;
+          }
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        router.push('/login');
-        return;
-      }
+          const { data, error } = await supabase
+            .from('mind_maps')
+            .select('*')
+            .eq('id', mapId)
+            .eq('user_id', user.id)
+            .single();
 
-      const { data, error } = await supabase
-        .from('mind_maps')
-        .select('*')
-        .eq('id', mapId)
-        .eq('user_id', user.id)
-        .single();
-
-      if (error) {
-        console.error('Load error:', error);
-        setSaveMessage('Error loading map');
-        return;
-      }
-
-      if (data) {
-        setNodes(data.nodes || []);
-        setConnections(data.connections || []);
-        setMapTitle(data.title || "My Mind Map");
+          if (error) throw error;
+          
+          if (data) {
+            setNodes(data.nodes || []);
+            setConnections(data.connections || []);
+            setMapTitle(data.title || "Untitled Map");
+          }
+        } catch (error) {
+          console.error('Load error:', error);
+          setSaveMessage('Error loading map');
+        } finally {
+          setIsLoading(false);
+        }
+      } else {
+        setNodes([
+          { id: "1", x: 100, y: 100, text: "Main Idea", width: 120, height: 40 },
+          { id: "2", x: 300, y: 100, text: "Sub Topic", width: 120, height: 40 }
+        ]);
+        setConnections([{ from: "1", to: "2" }]);
+        setIsLoading(false);
       }
     };
 
     loadMap();
   }, [mapId, router]);
 
-  // Save function with improved error handling
-  const saveMindMap = async (title, nodes, connections) => {
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) {
-    alert('Login required');
-    return;
-  }
-
-  try {
-    const mapData = {
-      user_id: user.id,
-      title,
-      nodes,
-      connections,
-      updated_at: new Date().toISOString()
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Delete selected node
+      if (e.key === 'Delete' && selectedNode) {
+        deleteNode(selectedNode);
+      }
+      // Save with Ctrl+S or Cmd+S
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        saveMindMap();
+      }
+      // Add new node with Enter
+      if (e.key === 'Enter' && !editingNode) {
+        addNode();
+      }
+      // Escape current actions
+      if (e.key === 'Escape') {
+        setSelectedNode(null);
+        setEditingNode(null);
+        if (isCreatingConnection) {
+          setIsCreatingConnection(false);
+          setConnectionStart(null);
+          setTempConnection(null);
+        }
+      }
     };
 
-    // If we have a mapId, include it for upsert
-    if (mapId) {
-      mapData.id = mapId;
-    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedNode, editingNode, isCreatingConnection]);
 
-    const { data, error } = await supabase
-      .from('mind_maps')
-      .upsert(mapData)
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    alert('Map saved successfully!');
-    
-    // If this was a new map, update the URL with the new ID
-    if (!mapId && data?.id) {
-      window.history.replaceState(null, '', `?mapId=${data.id}`);
-    }
-
-    return data;
-  } catch (error) {
-    console.error('Save error:', error);
-    alert(`Error saving map: ${error.message}`);
-    return null;
-  }
-};
-
-  // Load all maps for the current user
-  const loadMindMaps = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      router.push('/login');
-      return [];
-    }
-
-    const { data, error } = await supabase
-      .from('mind_maps')
-      .select('id, title, updated_at')
-      .eq('user_id', user.id)
-      .order('updated_at', { ascending: false });
-
-    if (error) {
-      console.error('Load error:', error);
-      return [];
-    }
-
-    return data;
+  // Delete a node and its connections
+  const deleteNode = (nodeId) => {
+    setNodes(nodes.filter(node => node.id !== nodeId));
+    setConnections(connections.filter(
+      conn => conn.from !== nodeId && conn.to !== nodeId
+    ));
+    setSelectedNode(null);
   };
 
-  // Auto-save every 10 seconds when changes are detected
+  // Save function
+  const saveMindMap = async () => {
+    setIsSaving(true);
+    setSaveMessage("Saving...");
+    
+    try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        router.push('/login');
+        return;
+      }
+
+      const mapData = {
+        user_id: user.id,
+        title: mapTitle,
+        nodes,
+        connections,
+        updated_at: new Date().toISOString()
+      };
+
+      if (mapId) mapData.id = mapId;
+
+      const { data, error } = await supabase
+        .from('mind_maps')
+        .upsert(mapData)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setSaveMessage("Saved successfully!");
+      setTimeout(() => setSaveMessage(""), 3000);
+      
+      if (!mapId && data?.id) {
+        router.push(`/map/${data.id}`);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Save error:', error);
+      setSaveMessage(`Error: ${error.message}`);
+      setTimeout(() => setSaveMessage(""), 5000);
+      return null;
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Auto-save every 10 seconds
   useEffect(() => {
     if (mapId) {
       const autoSaveTimer = setInterval(() => {
@@ -182,7 +214,7 @@ export default function MindMap() {
     return () => window.removeEventListener("resize", drawGrid);
   }, [scale]);
 
-  // Node and connection handlers (keep your existing functions)
+  // Node and connection handlers
   const addNode = () => {
     const newNode = {
       id: `node-${Date.now()}`,
@@ -303,6 +335,15 @@ export default function MindMap() {
   const zoomIn = () => setScale((prev) => Math.min(2, prev + 0.1));
   const zoomOut = () => setScale((prev) => Math.max(0.5, prev - 0.1));
 
+  if (isLoading) {
+    return (
+      <div className="flex flex-col h-screen bg-gray-100 items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        <p className="mt-4 text-gray-600">Loading your mind map...</p>
+      </div>
+    );
+  }
+
   return (
     <div
       className="flex flex-col h-screen bg-gray-100 text-gray-800"
@@ -310,18 +351,21 @@ export default function MindMap() {
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
     >
-      {/* Toolbar with save status */}
-      <div className="bg-white p-4 shadow-md flex items-center space-x-4">
+      {/* Toolbar */}
+      <div className="bg-white p-4 shadow-md flex items-center space-x-10">
+        <Link href="/" className="text-xl font-bold text-gray-800">
+          Home
+        </Link>
         <input
           type="text"
           value={mapTitle}
           onChange={(e) => setMapTitle(e.target.value)}
-          className="px-4 py-2 border rounded flex-1"
+          className="px-4 py-2 border rounded"
           placeholder="Map Title"
         />
 
         <button
-          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 cursor-pointer"
           onClick={addNode}
           disabled={isSaving}
         >
@@ -329,7 +373,9 @@ export default function MindMap() {
         </button>
 
         <button
-          className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 flex items-center"
+          className={`px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 cursor-pointer flex items-center ${
+            isSaving ? 'opacity-50 cursor-not-allowed' : ''
+          }`}
           onClick={saveMindMap}
           disabled={isSaving}
         >
@@ -342,28 +388,53 @@ export default function MindMap() {
               Saving...
             </>
           ) : (
-            '💾 Save'
+            'Save (Ctrl+S)'
           )}
         </button>
 
+        {selectedNode && (
+          <button
+            className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 cursor-pointer"
+            onClick={() => deleteNode(selectedNode)}
+            disabled={isSaving}
+          >
+            Delete (Del)
+          </button>
+        )}
+
         <button
-          className="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600"
+          className="px-4 py-2 bg-yellow-500 text-white rounded cursor-pointer hover:bg-yellow-600"
           onClick={async () => {
-            const maps = await loadMindMaps();
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) {
+              router.push('/login');
+              return;
+            }
+            
+            const { data, error } = await supabase
+              .from('mind_maps')
+              .select('id, title')
+              .eq('user_id', user.id);
+              
+            if (error) {
+              console.error('Error loading maps:', error);
+              return;
+            }
+            
             const selectedMapId = prompt(
               "Enter Map ID (Available maps: " + 
-              maps.map(m => `\n${m.id}: ${m.title}`).join('')
+              data.map(m => `\n${m.id}: ${m.title}`).join('')
             );
-            if (selectedMapId) router.push(`/map?mapId=${selectedMapId}`);
+            if (selectedMapId) router.push(`/map/${selectedMapId}`);
           }}
           disabled={isSaving}
         >
-          📂 Load
+          Load
         </button>
 
         <div className="flex items-center space-x-2">
           <button
-            className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300"
+            className="px-3 py-1 bg-gray-200 rounded cursor-pointer hover:bg-gray-300"
             onClick={zoomOut}
             disabled={isSaving}
           >
@@ -371,7 +442,7 @@ export default function MindMap() {
           </button>
           <span className="text-sm">{(scale * 100).toFixed(0)}%</span>
           <button
-            className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300"
+            className="px-3 py-1 bg-gray-200 cursor-pointer rounded hover:bg-gray-300"
             onClick={zoomIn}
             disabled={isSaving}
           >
