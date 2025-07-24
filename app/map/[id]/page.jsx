@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 
-// Node shape types
+
 const NODE_TYPES = {
   RECTANGLE: 'rectangle',
   CIRCLE: 'circle',
@@ -12,7 +12,7 @@ const NODE_TYPES = {
   CLOUD: 'cloud'
 };
 
-// Default colors
+
 const DEFAULT_NODE_COLOR = '#ffffffff';
 const DEFAULT_CONNECTION_COLOR = '#94a3b8';
 
@@ -21,7 +21,7 @@ export default function MindMap() {
   const params = useParams();
   const mapId = params.id;
   
-  // State initialization
+  
   const [nodes, setNodes] = useState([]);
   const [connections, setConnections] = useState([]);
   const [scale, setScale] = useState(1);
@@ -46,7 +46,7 @@ export default function MindMap() {
   const gridRef = useRef(null);
   const lastMousePos = useRef({ x: 0, y: 0 });
 
-  // Load map when component mounts or mapId changes
+  
   useEffect(() => {
     const loadMap = async () => {
       if (mapId) {
@@ -109,7 +109,7 @@ export default function MindMap() {
     loadMap();
   }, [mapId, router]);
 
-  // Keyboard shortcuts
+  
   useEffect(() => {
     const handleKeyDown = (e) => {
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedNode) {
@@ -138,7 +138,7 @@ export default function MindMap() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedNode, editingNode, isCreatingConnection]);
 
-  // Toggle node collapse state
+  
   const toggleCollapse = (nodeId) => {
     setCollapsedNodes(prev => {
       const newSet = new Set(prev);
@@ -151,22 +151,22 @@ export default function MindMap() {
     });
   };
 
-  // Calculate intersection point with node border
+  
   const getBorderIntersection = (fromX, fromY, toX, toY, node) => {
     const centerX = node.x + node.width / 2;
     const centerY = node.y + node.height / 2;
     
-    // Calculate direction vector
+    
     const dx = toX - fromX;
     const dy = toY - fromY;
     const length = Math.sqrt(dx * dx + dy * dy);
     const dirX = dx / length;
     const dirY = dy / length;
     
-    // For different node types
+    
     switch(node.type) {
       case NODE_TYPES.CIRCLE:
-        // Circle intersection
+        
         const radius = Math.min(node.width, node.height) / 2;
         const angle = Math.atan2(dirY, dirX);
         return {
@@ -175,11 +175,11 @@ export default function MindMap() {
         };
         
       case NODE_TYPES.DIAMOND:
-        // Diamond intersection (rotated square)
+        
         const halfWidth = node.width / 2;
         const halfHeight = node.height / 2;
         
-        // Check which edge we intersect
+        
         const absDirX = Math.abs(dirX);
         const absDirY = Math.abs(dirY);
         
@@ -199,12 +199,12 @@ export default function MindMap() {
           };
         }
         
-      default: // Rectangle and Cloud
-        // Rectangle intersection
+      default: 
+        
         const halfW = node.width / 2;
         const halfH = node.height / 2;
         
-        // Calculate intersection with rectangle
+        
         const tX = (dirX > 0 ? halfW : -halfW) / dirX;
         const tY = (dirY > 0 ? halfH : -halfH) / dirY;
         const t = Math.min(tX, tY);
@@ -216,14 +216,14 @@ export default function MindMap() {
     }
   };
 
-  // Calculate smooth bezier curve path between nodes
+  
   const calculateConnectionPath = (fromNode, toNode) => {
     const fromCenterX = fromNode.x + fromNode.width / 2;
     const fromCenterY = fromNode.y + fromNode.height / 2;
     const toCenterX = toNode.x + toNode.width / 2;
     const toCenterY = toNode.y + toNode.height / 2;
     
-    // Get intersection points at node borders
+    
     const fromIntersection = getBorderIntersection(
       toCenterX, toCenterY, fromCenterX, fromCenterY, fromNode
     );
@@ -231,7 +231,7 @@ export default function MindMap() {
       fromCenterX, fromCenterY, toCenterX, toCenterY, toNode
     );
     
-    // Calculate control points for a smooth curve
+    
     const dx = toIntersection.x - fromIntersection.x;
     const dy = toIntersection.y - fromIntersection.y;
     const controlX1 = fromIntersection.x + dx * 0.5;
@@ -246,7 +246,7 @@ export default function MindMap() {
     };
   };
 
-  // Add a new node
+  
   const addNode = () => {
     const newNode = {
       id: `node-${Date.now()}`,
@@ -255,20 +255,20 @@ export default function MindMap() {
       text: "New Idea",
       width: 120,
       height: 40,
-      type: NODE_TYPES.RECTANGLE,
+      type: NODE_TYPES.CIRCLE,
       color: DEFAULT_NODE_COLOR
     };
     setNodes([...nodes, newNode]);
   };
 
-  // Update node properties
+  
   const updateNode = (nodeId, updates) => {
     setNodes(nodes.map(node => 
       node.id === nodeId ? { ...node, ...updates } : node
     ));
   };
 
-  // Show context menu for node
+  
   const showNodeMenu = (e, nodeId) => {
     e.preventDefault();
     setNodeMenu({
@@ -279,12 +279,12 @@ export default function MindMap() {
     });
   };
 
-  // Close context menu
+  
   const closeNodeMenu = () => {
     setNodeMenu({ visible: false, x: 0, y: 0, nodeId: null });
   };
 
-  // Delete a node and its connections
+  
   const deleteNode = (nodeId) => {
     setNodes(nodes.filter(node => node.id !== nodeId));
     setConnections(connections.filter(
@@ -294,7 +294,7 @@ export default function MindMap() {
     closeNodeMenu();
   };
 
-  // Save function
+  
   const saveMindMap = async () => {
     setIsSaving(true);
     setSaveMessage("");
@@ -342,7 +342,7 @@ export default function MindMap() {
     }
   };
 
-  // Auto-save every 10 seconds
+  
   useEffect(() => {
     if (mapId) {
       const autoSaveTimer = setInterval(() => {
@@ -355,7 +355,7 @@ export default function MindMap() {
     }
   }, [nodes, connections, mapId]);
 
-  // Grid drawing effect
+  
   useEffect(() => {
     const drawGrid = () => {
       if (!gridRef.current) return;
@@ -391,7 +391,7 @@ export default function MindMap() {
     return () => window.removeEventListener("resize", drawGrid);
   }, [scale]);
 
-  // Render node based on its type
+  
   const renderNodeShape = (node) => {
     const baseClasses = "w-full h-full flex items-center justify-center p-2";
     const isSelected = selectedNode === node.id;
@@ -471,7 +471,7 @@ export default function MindMap() {
             </div>
           </div>
         );
-      default: // RECTANGLE
+      default: 
         return (
           <div className="rounded-lg border-2 border-gray-300" style={{
             width: `${node.width}px`,
@@ -496,11 +496,11 @@ export default function MindMap() {
     }
   };
 
-  // Filter out collapsed nodes and their children
+  
   const visibleNodes = nodes.filter(node => {
     if (collapsedNodes.has(node.id)) return false;
     
-    // Check if any ancestor is collapsed
+    
     let parentId = connections.find(conn => conn.to === node.id)?.from;
     while (parentId) {
       if (collapsedNodes.has(parentId)) return false;
@@ -510,12 +510,12 @@ export default function MindMap() {
     return true;
   });
 
-  // Filter out connections to collapsed nodes
+  
   const visibleConnections = connections.filter(conn => {
     return !collapsedNodes.has(conn.from) && !collapsedNodes.has(conn.to);
   });
 
-  // Node and connection handlers
+  
   const startEditing = (node) => {
     setEditingNode(node.id);
     setEditText(node.text);
@@ -838,16 +838,23 @@ export default function MindMap() {
         </div>
       </div>
 
-      {/* Node context menu */}
+      
       {nodeMenu.visible && (
-        <div 
-          className="fixed bg-white shadow-lg rounded-md py-2 z-50"
+          <div 
+          className="fixed bg-white shadow-lg  rounded-md py-2 z-50 min-w-[200px]"
           style={{
             left: `${nodeMenu.x}px`,
             top: `${nodeMenu.y}px`,
           }}
-          onClick={(e) => e.stopPropagation()}
-        >
+          onClick={(e) => {
+            e.stopPropagation(); 
+            e.preventDefault(); 
+          }}
+          onContextMenu={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+          }}
+  >
           <div className="px-4 py-2 font-semibold border-b">Node Options</div>
           <div className="flex flex-col">
             <button 
@@ -910,7 +917,6 @@ export default function MindMap() {
 
       <svg className="hidden">
         <defs>
-          {/* Enhanced arrowhead marker */}
           <marker
             id="arrowhead"
             markerWidth="10"
