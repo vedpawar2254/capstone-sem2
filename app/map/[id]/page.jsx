@@ -79,20 +79,20 @@ export default function MindMap() {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Delete selected node
-      if (e.key === 'Delete' && selectedNode) {
+      
+      if (e.keyCode === 46 || e.keyCode === 8 && selectedNode) {
         deleteNode(selectedNode);
       }
-      // Save with Ctrl+S or Cmd+S
+      
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
         saveMindMap();
       }
-      // Add new node with Enter
+      
       if (e.key === 'Enter' && !editingNode) {
         addNode();
       }
-      // Escape current actions
+      
       if (e.key === 'Escape') {
         setSelectedNode(null);
         setEditingNode(null);
@@ -147,7 +147,7 @@ export default function MindMap() {
 
       if (error) throw error;
 
-      setSaveMessage("Saved successfully!");
+      setSaveMessage("");
       setTimeout(() => setSaveMessage(""), 3000);
       
       if (!mapId && data?.id) {
@@ -385,7 +385,7 @@ export default function MindMap() {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
-              Saving...
+             
             </>
           ) : (
             'Save (Ctrl+S)'
