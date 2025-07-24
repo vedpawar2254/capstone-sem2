@@ -3,7 +3,8 @@ import { useState, useRef, useEffect } from "react";
 import { supabase } from '@/lib/supabaseClient';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-
+import { toPng, toJpeg, toBlob, toPixelData, toSvg } from 'html-to-image';
+import { jsPDF } from 'jspdf';
 
 const NODE_TYPES = {
   RECTANGLE: 'rectangle',
@@ -12,7 +13,6 @@ const NODE_TYPES = {
   CLOUD: 'cloud'
 };
 
-
 const DEFAULT_NODE_COLOR = '#ffffffff';
 const DEFAULT_CONNECTION_COLOR = '#94a3b8';
 
@@ -20,7 +20,6 @@ export default function MindMap() {
   const router = useRouter();
   const params = useParams();
   const mapId = params.id;
-  
   
   const [nodes, setNodes] = useState([]);
   const [connections, setConnections] = useState([]);
@@ -42,11 +41,11 @@ export default function MindMap() {
   const [connectionColor, setConnectionColor] = useState(DEFAULT_CONNECTION_COLOR);
   const [collapsedNodes, setCollapsedNodes] = useState(new Set());
   const [nodeMenu, setNodeMenu] = useState({ visible: false, x: 0, y: 0, nodeId: null });
+  const [isExporting, setIsExporting] = useState(false);
   const canvasRef = useRef(null);
   const gridRef = useRef(null);
   const lastMousePos = useRef({ x: 0, y: 0 });
 
-  
   useEffect(() => {
     const loadMap = async () => {
       if (mapId) {
@@ -109,7 +108,6 @@ export default function MindMap() {
     loadMap();
   }, [mapId, router]);
 
-  
   useEffect(() => {
     const handleKeyDown = (e) => {
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedNode) {
@@ -138,7 +136,6 @@ export default function MindMap() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedNode, editingNode, isCreatingConnection]);
 
-  
   const toggleCollapse = (nodeId) => {
     setCollapsedNodes(prev => {
       const newSet = new Set(prev);
@@ -151,11 +148,9 @@ export default function MindMap() {
     });
   };
 
-  
   const getBorderIntersection = (fromX, fromY, toX, toY, node) => {
     const centerX = node.x + node.width / 2;
     const centerY = node.y + node.height / 2;
-    
     
     const dx = toX - fromX;
     const dy = toY - fromY;
@@ -163,10 +158,8 @@ export default function MindMap() {
     const dirX = dx / length;
     const dirY = dy / length;
     
-    
     switch(node.type) {
       case NODE_TYPES.CIRCLE:
-        
         const radius = Math.min(node.width, node.height) / 2;
         const angle = Math.atan2(dirY, dirX);
         return {
@@ -175,10 +168,8 @@ export default function MindMap() {
         };
         
       case NODE_TYPES.DIAMOND:
-        
         const halfWidth = node.width / 2;
         const halfHeight = node.height / 2;
-        
         
         const absDirX = Math.abs(dirX);
         const absDirY = Math.abs(dirY);
@@ -200,10 +191,8 @@ export default function MindMap() {
         }
         
       default: 
-        
         const halfW = node.width / 2;
         const halfH = node.height / 2;
-        
         
         const tX = (dirX > 0 ? halfW : -halfW) / dirX;
         const tY = (dirY > 0 ? halfH : -halfH) / dirY;
@@ -216,13 +205,11 @@ export default function MindMap() {
     }
   };
 
-  
   const calculateConnectionPath = (fromNode, toNode) => {
     const fromCenterX = fromNode.x + fromNode.width / 2;
     const fromCenterY = fromNode.y + fromNode.height / 2;
     const toCenterX = toNode.x + toNode.width / 2;
     const toCenterY = toNode.y + toNode.height / 2;
-    
     
     const fromIntersection = getBorderIntersection(
       toCenterX, toCenterY, fromCenterX, fromCenterY, fromNode
@@ -230,7 +217,6 @@ export default function MindMap() {
     const toIntersection = getBorderIntersection(
       fromCenterX, fromCenterY, toCenterX, toCenterY, toNode
     );
-    
     
     const dx = toIntersection.x - fromIntersection.x;
     const dy = toIntersection.y - fromIntersection.y;
@@ -246,7 +232,6 @@ export default function MindMap() {
     };
   };
 
-  
   const addNode = () => {
     const newNode = {
       id: `node-${Date.now()}`,
@@ -261,14 +246,12 @@ export default function MindMap() {
     setNodes([...nodes, newNode]);
   };
 
-  
   const updateNode = (nodeId, updates) => {
     setNodes(nodes.map(node => 
       node.id === nodeId ? { ...node, ...updates } : node
     ));
   };
 
-  
   const showNodeMenu = (e, nodeId) => {
     e.preventDefault();
     setNodeMenu({
@@ -279,12 +262,10 @@ export default function MindMap() {
     });
   };
 
-  
   const closeNodeMenu = () => {
     setNodeMenu({ visible: false, x: 0, y: 0, nodeId: null });
   };
 
-  
   const deleteNode = (nodeId) => {
     setNodes(nodes.filter(node => node.id !== nodeId));
     setConnections(connections.filter(
@@ -294,7 +275,6 @@ export default function MindMap() {
     closeNodeMenu();
   };
 
-  
   const saveMindMap = async () => {
     setIsSaving(true);
     setSaveMessage("");
@@ -342,7 +322,6 @@ export default function MindMap() {
     }
   };
 
-  
   useEffect(() => {
     if (mapId) {
       const autoSaveTimer = setInterval(() => {
@@ -355,7 +334,6 @@ export default function MindMap() {
     }
   }, [nodes, connections, mapId]);
 
-  
   useEffect(() => {
     const drawGrid = () => {
       if (!gridRef.current) return;
@@ -391,7 +369,6 @@ export default function MindMap() {
     return () => window.removeEventListener("resize", drawGrid);
   }, [scale]);
 
-  
   const renderNodeShape = (node) => {
     const baseClasses = "w-full h-full flex items-center justify-center p-2";
     const isSelected = selectedNode === node.id;
@@ -496,10 +473,8 @@ export default function MindMap() {
     }
   };
 
-  
   const visibleNodes = nodes.filter(node => {
     if (collapsedNodes.has(node.id)) return false;
-    
     
     let parentId = connections.find(conn => conn.to === node.id)?.from;
     while (parentId) {
@@ -510,12 +485,10 @@ export default function MindMap() {
     return true;
   });
 
-  
   const visibleConnections = connections.filter(conn => {
     return !collapsedNodes.has(conn.from) && !collapsedNodes.has(conn.to);
   });
 
-  
   const startEditing = (node) => {
     setEditingNode(node.id);
     setEditText(node.text);
@@ -625,6 +598,75 @@ export default function MindMap() {
   const zoomIn = () => setScale((prev) => Math.min(2, prev + 0.1));
   const zoomOut = () => setScale((prev) => Math.max(0.5, prev - 0.1));
 
+  const exportToPDF = async () => {
+    setIsExporting(true);
+    try {
+      
+      const originalPosition = { ...canvasPosition };
+      const originalScale = scale;
+      
+      setCanvasPosition({ x: 0, y: 0 });
+      setScale(1);
+      
+      
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      
+      const canvasElement = canvasRef.current;
+      
+      if (!canvasElement) {
+        throw new Error("Canvas element not found");
+      }
+      
+     
+      const dataUrl = await toPng(canvasElement, {
+        backgroundColor: '#ffffff',
+        quality: 1,
+        pixelRatio: 2 
+      });
+      
+      
+      const img = new Image();
+      img.src = dataUrl;
+      
+      await new Promise((resolve) => {
+        img.onload = resolve;
+      });
+      
+      const pdf = new jsPDF({
+        orientation: img.width > img.height ? 'landscape' : 'portrait',
+        unit: 'mm'
+      });
+      
+      
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      
+      const imgWidth = pageWidth - 20; 
+      const imgHeight = (img.height * imgWidth) / img.width;
+      
+      
+      pdf.setFontSize(18);
+      pdf.text(mapTitle, pageWidth / 2, 10, { align: 'center' });
+      
+    
+      pdf.addImage(dataUrl, 'PNG', 10, 15, imgWidth, imgHeight);
+      
+     
+      pdf.save(`${mapTitle || 'mind-map'}.pdf`);
+      
+    } catch (error) {
+      console.error('Error exporting to PDF:', error);
+      setSaveMessage(`Export failed: ${error.message}`);
+      setTimeout(() => setSaveMessage(""), 5000);
+    } finally {
+      // Restore original position and scale
+      setCanvasPosition(originalPosition);
+      setScale(originalScale);
+      setIsExporting(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex flex-col h-screen bg-gray-100 items-center justify-center">
@@ -722,6 +764,26 @@ export default function MindMap() {
             +
           </button>
         </div>
+
+        <button
+          className={`px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 cursor-pointer flex items-center ${
+            isExporting ? 'opacity-50 cursor-not-allowed' : ''
+          }`}
+          onClick={exportToPDF}
+          disabled={isExporting || isSaving}
+        >
+          {isExporting ? (
+            <>
+              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              Exporting...
+            </>
+          ) : (
+            'Export PDF'
+          )}
+        </button>
       </div>
 
       {saveMessage && (
@@ -838,10 +900,9 @@ export default function MindMap() {
         </div>
       </div>
 
-      
       {nodeMenu.visible && (
           <div 
-          className="fixed bg-white shadow-lg  rounded-md py-2 z-50 min-w-[200px]"
+          className="fixed bg-white shadow-lg rounded-md py-2 z-50 min-w-[200px]"
           style={{
             left: `${nodeMenu.x}px`,
             top: `${nodeMenu.y}px`,
@@ -854,7 +915,7 @@ export default function MindMap() {
             e.stopPropagation();
             e.preventDefault();
           }}
-  >
+        >
           <div className="px-4 py-2 font-semibold border-b">Node Options</div>
           <div className="flex flex-col">
             <button 
