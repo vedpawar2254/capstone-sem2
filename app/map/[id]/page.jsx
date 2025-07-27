@@ -876,7 +876,7 @@ export default function MindMap() {
               onDoubleClick={() => startEditing(node)}
               onContextMenu={(e) => showNodeMenu(e, node.id)}
             >
-              {/* Connection handle */}
+             
               <div
                 className="absolute right-0 top-1/2 transform -translate-y-1/2 translate-x-2 w-3 h-3 rounded-full bg-purple-500 cursor-crosshair"
                 onMouseDown={(e) => startConnection(e, node)}
